@@ -1,29 +1,44 @@
-const express = require('express')
-const app = express()
-const server = require('http').Server(app)
-const io = require('socket.io')(server)
-const { v4: uuidV4 } = require('uuid')
+const express = require("express");
+const app = express();
+const server = require("http").Server(app);
+const io = require("socket.io")(server);
+const { v4: uuidV4 } = require("uuid");
 
-app.set('view engine', 'ejs')
-app.use(express.static('public'))
+process.on("unhandledRejection", (reason, p) => {
+  console.error("Unhandled Rejection at:", p, "reason:", reason);
+  // send entire app down. Process manager will restart it
+  process.exit(1);
+});
 
-app.get('/', (req, res) => {
-  res.redirect(`/${uuidV4()}`)
-})
+if (process.env.NODE_ENV === "production") {
+  app.use((req, res, next) => {
+    if (req.header("x-forwarded-proto") !== "https")
+      res.redirect(`https://${req.header("host")}${req.url}`);
+    else next();
+  });
+}
+app.set("view engine", "ejs");
+app.use(express.static("public"));
 
-app.get('/:room', (req, res) => {
-  res.render('room', { roomId: req.params.room })
-})
+app.get("/", (req, res) => {
+  res.redirect(`/${uuidV4()}`);
+});
 
-io.on('connection', socket => {
-  socket.on('join-room', (roomId, userId) => {
-    socket.join(roomId)
-    socket.to(roomId).broadcast.emit('user-connected', userId)
+app.get("/:room", (req, res) => {
+  res.render("room", { roomId: req.params.room });
+});
 
-    socket.on('disconnect', () => {
-      socket.to(roomId).broadcast.emit('user-disconnected', userId)
-    })
-  })
-})
+io.on("connection", (socket) => {
+  socket.on("join-room", (roomId, userId) => {
+    socket.join(roomId);
+    socket.to(roomId).broadcast.emit("user-connected", userId);
 
-server.listen(3000)
+    socket.on("disconnect", () => {
+      socket.to(roomId).broadcast.emit("user-disconnected", userId);
+    });
+  });
+});
+const port = process.env.PORT || 3000;
+server.listen(port, () => {
+  console.log("Server listening on ", `http://localhost:${port}`);
+});
